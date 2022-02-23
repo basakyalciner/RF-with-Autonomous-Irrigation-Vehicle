@@ -1,0 +1,268 @@
+#include <18f46k22.h>
+#device *=16
+#device adc=10
+
+#fuses INTRC_IO                  //use internal osc (yes !!) 
+//#fuses PLLEN                     // Phase lock loop enable
+#FUSES NOMCLR                    //Master Clear pin disabled,pin 1( RE3 available !) 
+#FUSES NOWDT                     //No Watch Dog Timer 
+#FUSES NOBROWNOUT                // brownout reset 
+#FUSES NOPUT                     //No Power Up Timer 
+#FUSES NODEBUG                   //No Debug mode for ICD 
+#FUSES PROTECT                   //Code protected from reading 
+#FUSES CPD                       //EE protection 
+#FUSES WRT                       //Program memory write protected 
+#FUSES NOWRTD                      //Data EEPROM write protected 
+#FUSES NOWRTB                      //Boot block write protected 
+#FUSES NOEBTR                      //Memory protected from table reads 
+#FUSES NOEBTRB                     //Boot block protected from table reads 
+#FUSES CPB                       //Boot Block code protection 
+#FUSES WRTC                      //configuration not registers write protected 
+#FUSES NOFCMEN                   //Fail-safe clock monitor enabled 
+#FUSES NOSTVREN                  //Stack full/underflow will cause reset 
+#FUSES NOIESO                    //Internal External Switch Over mode enabled 
+#FUSES NOXINST                   //Extended set extension and Indexed Addressing mode disabled (Legacy mode)
+
+
+
+double map(double value, float x_min, float x_max, float y_min, float y_max)    
+{                                
+    return (y_min + (((y_max - y_min)/(x_max - x_min)) * (value - x_min))); 
+}  
+
+
+#use delay(clock=64000000) 
+#use rs232(baud=9600, xmit=PIN_C6, rcv=PIN_C7, parity=N, stop=1, errors, timeout=3, stream=dorji)
+
+#include <C:\Users\emreo\Desktop\proje\ds1302.c>
+#include <C:\Users\emreo\Desktop\proje\lcd.c>
+#include <C:\Users\emreo\Desktop\proje\dht11.c>
+
+#use fast_io(a)
+#use fast_io(b)
+#use fast_io(c)
+#use fast_io(d)
+#use fast_io(e)
+
+#define but1 PIN_D3
+#define but2 PIN_C4
+#define but3 PIN_C5
+
+#define relay PIN_A3
+
+#define LCD_ENABLE_PIN  PIN_D0                                    
+#define LCD_RS_PIN      PIN_D1                                    
+#define LCD_RW_PIN      PIN_D2                                    
+#define LCD_DATA4       PIN_D4                                   
+#define LCD_DATA5       PIN_D5                                    
+#define LCD_DATA6       PIN_D6                                   
+#define LCD_DATA7       PIN_D7
+
+
+int gelen_data[16];
+int x=0, ayar=0,isi=0, nem=0, nem_ist=0,a=0,calis=1;
+int16 nem_o=0, nem_t=0,lcd_time=0,y=0,nem_g=0;
+int8 saniye,dakika,saat=1,gun=1,ay=1,yil=1,haftanin_gunu=1;
+#INT_RDA
+
+void serihaberlesme_kesmesi()
+{    
+   disable_interrupts(GLOBAL);
+   disable_interrupts(INT_RDA);
+   gelen_data[0] = getch();
+   if(gelen_data[0] == 'B'){
+      gelen_data[1]=getch();
+      gelen_data[2]=getch();
+      if(gelen_data[1]=='L'){
+         nem_ist=gelen_data[2];
+      }
+      if(gelen_data[1]=='O'){
+         a=gelen_data[2];
+      }
+   }
+}
+
+
+
+void main(){
+
+
+   set_tris_a(0b00000001);
+   set_tris_b(0b00000000);
+   set_tris_c(0b10110000); 
+   set_tris_d(0b00001000);
+   set_tris_e(0b00000000);
+   
+   output_a(0x00);
+   output_b(0x00);
+   output_c(0x00);
+   output_d(0x00);
+   output_e(0x00);
+
+   
+   output_high(PIN_C6);
+   output_high(PIN_C7);
+   
+   setup_adc(ADC_CLOCK_DIV_64);
+   setup_adc_ports(sAN0);
+   set_adc_channel(0);
+   
+   lcd_init();
+   lcd_gotoxy(1,1);
+   printf(lcd_putc,"\f<Basak & Yaren>");
+   lcd_gotoxy(1,2);
+   printf(lcd_putc,"      Emre");
+   delay_ms(3000);
+   printf(lcd_putc,"\f  <GREEN HOUSE>");
+   lcd_gotoxy(1,2);
+   printf(lcd_putc," Microprocessors");
+   delay_ms(3000);
+   
+   
+   clear_interrupt(INT_RDA);
+   enable_interrupts(INT_RDA);
+   enable_interrupts(GLOBAL);
+
+   rtc_init();
+
+   
+   dht_init();
+   
+   
+   while(true){
+   
+   run: //
+
+   delay_ms(100);
+   rtc_init();
+   rtc_get_time(saat,dakika,saniye);
+   rtc_get_date(gun,ay,yil,haftanin_gunu);
+   
+   read_dht();
+   isi=dht_dat[2];   
+   nem=dht_dat[0];
+   
+   lcd_time=lcd_time+1;
+   
+   
+   
+   
+
+   printf(lcd_putc,"\f        %02d/%02d/%02d\n",gun,ay,yil);
+   switch(haftanin_gunu)
+   {
+      case 1: printf(lcd_putc,"PAZ"); break;
+      case 2: printf(lcd_putc,"PZT"); break;
+      case 3: printf(lcd_putc,"SAL"); break;
+      case 4: printf(lcd_putc,"CRS"); break;
+      case 5: printf(lcd_putc,"PRS"); break;
+      case 6: printf(lcd_putc,"CUM"); break;
+      case 7: printf(lcd_putc,"CMT"); break;
+   }
+   lcd_gotoxy(7,0);
+   printf(lcd_putc, "\  %02d:%02d:%02d\n",saat,dakika,saniye);
+   lcd_gotoxy(1,1);
+   printf(lcd_putc, "\%02d C\n",isi);
+   
+   if(input(but1))
+   {
+     a=a+1;
+     delay_ms(1);
+      if(a>=25){
+         while(true)
+         {
+            printf(lcd_putc,"\f Motor Calisiyor");
+            output_high(relay);
+            delay_ms(100);
+            if(input(but2))
+            {
+               output_low(relay);
+               a=0;
+               goto run;
+               delay_ms(200);  
+            }
+         }
+      }
+   }
+   
+   if(input(but2)){
+      y=y+1;
+      delay_ms(1);
+      if(y>=25){   //  ayarlar
+         while(true){
+            read_dht();
+            isi=dht_dat[2];   
+            nem=dht_dat[0];
+            
+            nem_g = read_adc();
+
+            nem_g = nem_g/10;
+            nem_g = -1*(nem_g-100);
+            nem_g = map(nem_g, 0, 70, 0, 100);
+
+
+
+            printf(lcd_putc,"\fOrt N:%02d|S:%02d",nem,isi);
+            lcd_gotoxy(1,2);
+            printf(lcd_putc,"Tpk N:%lu\n",nem_g);
+            lcd_gotoxy(12,2);
+            printf(lcd_putc,"IN:%02d",nem_ist);
+            lcd_gotoxy(15,1);
+            printf(lcd_putc,"A");
+            lcd_getc(15,2);
+            lcd_cursor_on(TRUE);
+            
+            delay_ms(500);
+            
+            if(input(but3)){
+               nem_ist = nem_ist-1;
+               delay_ms(100);
+            }
+            else if(input(but1)){
+               nem_ist = nem_ist+1;
+               delay_ms(100);
+            }
+            else if(input(but2)){
+               lcd_cursor_on(FALSE);
+               delay_ms(100);
+               
+               if(nem_g<nem_ist){
+               while(true)
+               {
+                  output_high(relay);
+                  printf(lcd_putc,"\f Motor Calisiyor...");
+                  delay_ms(100);
+                  nem_g = read_adc();
+
+                  nem_g = nem_g/10;
+                  nem_g = -1*(nem_g-100);
+                  nem_g = map(nem_g, 0, 70, 0, 100);
+                  
+                  if(nem_g>nem_ist)
+                  {
+                     output_low(relay);
+                     y=0;
+                     goto run;
+                  }
+               }
+               }
+               y=0;
+               goto run;
+
+            }
+    }
+      }
+   }
+
+
+
+
+
+
+
+
+
+}
+}
+
+
